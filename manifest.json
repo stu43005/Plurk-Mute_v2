@@ -1,0 +1,36 @@
+{
+    "manifest_version": 2,
+    "name": "Plurk-Mute_v2",
+    "version": "2013.12.11.2",
+    "description": "噗浪自動消音",
+    "icons": {
+        "128": "128.png",
+        "16": "16.png"
+    },
+    "options_page": "options.html",
+    "background": {
+        "scripts": [
+            "jquery-2.0.2.min.js",
+            "common.js",
+            "background.js"
+        ]
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "http://www.plurk.com/*"
+            ],
+            "js": [
+                "jquery-2.0.2.min.js",
+                "content-script.js"
+            ]
+        }
+    ],
+    "permissions": [
+        "http://www.plurk.com/"
+    ],
+    "web_accessible_resources": [
+        "jquery-2.0.2.min.map",
+        "chrome_extension_icon.png"
+    ]
+}
