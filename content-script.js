@@ -164,6 +164,7 @@ function filter_loaded_plurks() {
 	if (!user_name) getusername();
 	$('div.plurk').each(function() {
 		if ($(this).parents("#colorbox").length > 0) return;
+		if ($(this).parents("#colorboxVideo").length > 0) return;
 		var $me = $(this),
 			plurk_id = $me.attr("id").match(/p(\d+)/),
 			text, nameid, name;
