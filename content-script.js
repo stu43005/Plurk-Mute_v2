@@ -33,7 +33,11 @@ function load_keywords() {
 		type: "POST",
 		url: "http://www.plurk.com/Friends/getMyFriendsCompletion",
 		success: function(data, textStatus, jqXHR) {
-			friend_list = JSON.parse(data);
+			if (typeof data == "string") {
+				friend_list = JSON.parse(data);
+			} else {
+				friend_list = data;
+			}
 			if (show_debug) console.debug("friend_list", friend_list);
 		},
 		error: function() {

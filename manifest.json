@@ -1,7 +1,7 @@
 {
     "manifest_version": 2,
     "name": "Plurk-Mute_v2",
-    "version": "2014.5.3.1",
+    "version": "2014.11.9.1",
     "description": "噗浪自動消音",
     "icons": {
         "128": "128.png",
