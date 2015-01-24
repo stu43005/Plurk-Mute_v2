@@ -31,7 +31,7 @@ function load_keywords() {
 	});
 	$.ajax({
 		type: "POST",
-		url: "http://www.plurk.com/Friends/getMyFriendsCompletion",
+		url: "/Friends/getMyFriendsCompletion",
 		success: function(data, textStatus, jqXHR) {
 			if (typeof data == "string") {
 				friend_list = JSON.parse(data);
@@ -48,7 +48,7 @@ function load_keywords() {
 }
 
 function getusername() {
-	user_name = location.href.match(/http:\/\/www.plurk.com\/(\w+)/)[1];
+	user_name = location.href.match(/www.plurk.com\/(\w+)/)[1];
 	console.debug('user_name:', user_name);
 }
 
@@ -252,16 +252,24 @@ function open_options() {
 function plurk_mute_init() {
 	getusername();
 	if ($("#canEdit").html() == 1) {
-		$("#top_bar td").append($("<a/>", {
-			"class": "item",
-			id: "muteoptions",
-			html: [$("<img/>", {
-				src: chrome.extension.getURL("chrome_extension_icon.png"),
-				width: 11,
-				height: 11,
-				id: "icon_muteoptions"
-			}), "自動消音設置"],
-			click: open_options
+		$("#top_bar .bar-block.right .pulldown .menu ul a[href*='/Settings/show?page=theme']").parent().after($("<li/>", {
+			"class": "sep"
+		}), $("<li/>", {
+			"class": "nohover",
+			html: $("<div/>", {
+				html: $("<i/>", {
+					css: {
+						color: "#aaa"
+					},
+					text: "Plurk-Mute_v2"
+				})
+			})
+		}), $("<li/>", {
+			html: $("<a/>", {
+				id: "muteoptions",
+				text: "自動消音設置",
+				click: open_options
+			})
 		}));
 		load_keywords();
 		setInterval(load_keywords, 60000);
