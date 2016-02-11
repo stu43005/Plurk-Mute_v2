@@ -247,12 +247,13 @@ function open_options() {
 	chrome.extension.sendRequest({
 		type: 'openOptions'
 	}, function(response) {});
+	return false;
 }
 
 function plurk_mute_init() {
 	getusername();
 	if ($("#canEdit").html() == 1) {
-		$("#top_bar .bar-block.right .pulldown .menu ul a[href*='/Settings/show?page=theme']").parent().after($("<li/>", {
+		$(".menu ul li a[href*='/Settings/show?page=theme']").parent().after($("<li/>", {
 			"class": "sep"
 		}), $("<li/>", {
 			"class": "nohover",
@@ -267,6 +268,7 @@ function plurk_mute_init() {
 		}), $("<li/>", {
 			html: $("<a/>", {
 				id: "muteoptions",
+				href: "#",
 				text: "自動消音設置",
 				click: open_options
 			})
