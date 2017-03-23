@@ -17,5 +17,9 @@
   "homepage": "https://github.com/stu43005/Plurk-Mute_v2#readme",
   "dependencies": {
     "localscript": "^1.0.2"
+  },
+  "devDependencies": {
+    "grunt": "^1.0.1",
+    "grunt-zip": "^0.17.1"
   }
 }
