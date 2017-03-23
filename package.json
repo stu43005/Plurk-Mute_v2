@@ -1,0 +1,21 @@
+{
+  "name": "plurk_mute_v2",
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stu43005/Plurk-Mute_v2.git"
+  },
+  "keywords": [
+    "plurk",
+    "mute"
+  ],
+  "author": "Shiaupiau",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/stu43005/Plurk-Mute_v2/issues"
+  },
+  "homepage": "https://github.com/stu43005/Plurk-Mute_v2#readme",
+  "dependencies": {
+    "localscript": "^1.0.2"
+  }
+}

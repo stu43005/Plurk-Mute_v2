@@ -1,55 +1,54 @@
 var interval = 500;
-var user_name;
+var user_name = null;
 var keywords = new Array();
 var exclude_mute_plurk = new Array();
 var friend_list;
 var show_debug = false;
 
-function appendscript(scriptText, args) {
-	var args = JSON.stringify(args);
-	if (typeof scriptText == 'function')
-		scriptText = '(' + scriptText + ')(' + args + ');';
-
-	var script = document.createElement('script');
-	script.type = 'text/javascript';
-	script.appendChild(document.createTextNode(scriptText));
-	document.body.appendChild(script);
-
-	setTimeout(function() {
-		script.parentNode.removeChild(script);
-	}, 1000);
-}
-
 function load_keywords() {
-	chrome.extension.sendRequest({
-		type: 'getOptions'
-	}, function(response) {
-		keywords = response.keywords;
-		exclude_mute_plurk = response.exclude_mute_plurk;
-		show_debug = response.show_debug;
-		if (show_debug) console.debug('keywords:', keywords, '\nexclude_mute_plurk:', exclude_mute_plurk);
-	});
-	$.ajax({
-		type: "POST",
-		url: "/Friends/getMyFriendsCompletion",
-		success: function(data, textStatus, jqXHR) {
-			if (typeof data == "string") {
-				friend_list = JSON.parse(data);
-			} else {
-				friend_list = data;
-			}
-			if (show_debug) console.debug("friend_list", friend_list);
-		},
-		error: function() {
-			setTimeout(load_keywords, 1000);
-			console.debug("Get friend list failed");
+	var p1 = new Promise(function(resolve, reject) {
+		try {
+			chrome.extension.sendRequest({
+				type: 'getOptions'
+			}, function(response) {
+				keywords = response.keywords;
+				exclude_mute_plurk = response.exclude_mute_plurk;
+				show_debug = response.show_debug;
+				resolve(response);
+				if (show_debug) console.debug('keywords:', keywords, '\nexclude_mute_plurk:', exclude_mute_plurk);
+			});
+		} catch (e) {
+			reject(e);
+			console.error('發生錯誤：', e);
+			var c = confirm('無法連線到插件後台，請立即重新整理頁面看看，可能有版本更新，繼續將無法正常操作');
+			if (c) window.location.reload();
 		}
 	});
+
+	var p2 = fetch("/Users/getCompletion", {
+		credentials: 'same-origin',
+		method: 'POST'
+	}).then(r => r.json()).then(json => {
+		friend_list = json;
+		if (show_debug) console.debug("friend_list", friend_list);
+		return friend_list;
+	}).catch(err => {
+		setTimeout(load_keywords, 1000);
+		console.error("Get friend list failed");
+	});
+
+	return Promise.all([p1, p2]);
 }
 
 function getusername() {
-	user_name = location.href.match(/www.plurk.com\/(\w+)/)[1];
-	console.debug('user_name:', user_name);
+	if (user_name == null) {
+		return getGlobalVariable("GLOBAL.page_user.nick_name").then(function(nick_name) {
+			user_name = nick_name;
+			if (show_debug) console.debug('user_name:', user_name);
+			return nick_name;
+		});
+	}
+	return Promise.resolve(user_name);
 }
 
 function set_mute(pid, c) {
@@ -60,7 +59,7 @@ function set_mute(pid, c) {
 		$("#p" + pid + " .mute").html("消音").removeClass("unmute");
 		$("#p" + pid).removeClass("muted");
 	}
-	appendscript(function(args) {
+	localScript(function(args) {
 		var a = getPD(AJS.$('p' + args.pid)).obj;
 		a.is_unread = args.c;
 	}, {
@@ -74,7 +73,7 @@ function set_mute(pid, c) {
 	});
 	if (c) {
 		$("#p" + pid).removeClass("new");
-		appendscript(function(args) {
+		localScript(function(args) {
 			var a = getPD(AJS.$('p' + args.pid)).obj;
 			Poll.setPlurkRead(a.id, a.response_count);
 		}, {
@@ -82,14 +81,14 @@ function set_mute(pid, c) {
 		});
 	}
 	if (c == 2) {
-		appendscript(function(args) {
+		localScript(function(args) {
 			var a = getPD(AJS.$('p' + args.pid)).obj;
 			Signals.sendSignal("plurk_muted", a);
 		}, {
 			pid: pid
 		});
 	} else {
-		appendscript(function(args) {
+		localScript(function(args) {
 			var a = getPD(AJS.$('p' + args.pid)).obj;
 			Signals.sendSignal("plurk_unmuted", a);
 		}, {
@@ -251,49 +250,44 @@ function open_options() {
 }
 
 function plurk_mute_init() {
-	getusername();
-	if ($("#canEdit").html() == 1) {
-		$(".menu ul li a[href*='/Settings/show?page=theme']").parent().after($("<li/>", {
-			"class": "sep"
-		}), $("<li/>", {
-			"class": "nohover",
-			html: $("<div/>", {
-				html: $("<i/>", {
-					css: {
-						color: "#aaa"
-					},
-					text: "Plurk-Mute_v2"
-				})
-			})
-		}), $("<li/>", {
-			html: $("<a/>", {
-				id: "muteoptions",
-				href: "#",
-				text: "自動消音設置",
-				click: open_options
-			})
-		}));
-		load_keywords();
-		setInterval(load_keywords, 60000);
-		setInterval(filter_loaded_plurks, interval);
-	} else if ($("#canEdit").html() != 0 && user_name != "m") {
-		setTimeout(plurk_mute_init, interval);
-		appendscript(function() {
-			var a = (typeof SiteState != 'undefined' && SiteState.canEdit()) ? '1' : '0',
-				b = 'canEdit',
-				c = AJS.$(b);
-			if (c) {
-				AJS.setHTML(c, a);
-			} else {
-				var s = AJS.SPAN({
-					id: b
-				}, a);
-				AJS.hideElement(s);
-				AJS.ACN(AJS.getBody(), s);
+	// check not mobile page
+	if ($(".plurk-feeds").length < 1) {
+		localScript(function() {
+			return SiteState.canEdit();
+		}).catch(function(err) {
+			setTimeout(plurk_mute_init, interval);
+		}).then(function(canEdit) {
+			if (canEdit == true) {
+				let p1 = getusername();
+				let p2 = load_keywords();
+				return Promise.all([p1, p2]).then(function() {
+					$(".menu ul li a[href*='/Settings/show?page=theme']").parent().after($("<li/>", {
+						"class": "sep"
+					}), $("<li/>", {
+						html: $("<a/>", {
+							css: {
+								color: "#aaa",
+								cursor: "default"
+							},
+							text: "Plurk-Mute_v2"
+						})
+					}), $("<li/>", {
+						html: $("<a/>", {
+							id: "muteoptions",
+							href: "#",
+							text: "自動消音設置",
+							click: open_options
+						})
+					}), $("<li/>", {
+						"class": "sep"
+					}));
+					setInterval(load_keywords, 60000);
+					setInterval(filter_loaded_plurks, interval);
+				});
 			}
 		});
 	}
-	if (user_name == "p") {
+	if ($("body").hasClass("permaplurk")) {
 		$(".adsense").hide();
 	}
 }
