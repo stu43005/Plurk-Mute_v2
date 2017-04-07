@@ -52,49 +52,14 @@ function getusername() {
 }
 
 function set_mute(pid, c) {
-	if (c) {
-		$("#p" + pid + " .mute").html("解除消音").addClass("unmute");
-		$("#p" + pid).addClass("muted");
-	} else {
-		$("#p" + pid + " .mute").html("消音").removeClass("unmute");
-		$("#p" + pid).removeClass("muted");
-	}
 	localScript(function(args) {
-		var a = getPD(AJS.$('p' + args.pid)).obj;
-		a.is_unread = args.c;
+		var a = PlurksManager.getPlurkById(args.pid);
+		a.is_unread = args.c == 2 ? 0 : 2;
+		PlurksManager.switchMute(args.pid);
 	}, {
 		pid: pid,
 		c: c
 	});
-	$.ajax({
-		type: 'POST',
-		url: '/TimeLine/setMutePlurk',
-		data: 'plurk_id=' + pid + '&value=' + c,
-	});
-	if (c) {
-		$("#p" + pid).removeClass("new");
-		localScript(function(args) {
-			var a = getPD(AJS.$('p' + args.pid)).obj;
-			Poll.setPlurkRead(a.id, a.response_count);
-		}, {
-			pid: pid
-		});
-	}
-	if (c == 2) {
-		localScript(function(args) {
-			var a = getPD(AJS.$('p' + args.pid)).obj;
-			Signals.sendSignal("plurk_muted", a);
-		}, {
-			pid: pid
-		});
-	} else {
-		localScript(function(args) {
-			var a = getPD(AJS.$('p' + args.pid)).obj;
-			Signals.sendSignal("plurk_unmuted", a);
-		}, {
-			pid: pid
-		});
-	}
 }
 
 function do_match(text) {
