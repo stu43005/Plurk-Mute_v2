@@ -2,7 +2,7 @@ var interval = 500;
 var user_name = null;
 var keywords = new Array();
 var exclude_mute_plurk = new Array();
-var friend_list;
+var friend_ids;
 var show_debug = false;
 
 function load_keywords() {
@@ -26,12 +26,15 @@ function load_keywords() {
 	});
 
 	var p2 = fetch("/Users/getCompletion", {
-		credentials: 'same-origin',
+		credentials: 'include',
 		method: 'POST'
 	}).then(r => r.json()).then(json => {
-		friend_list = json;
-		if (show_debug) console.debug("friend_list", friend_list);
-		return friend_list;
+		friend_ids = [];
+		for (var c in json) {
+			friend_ids.push(c * 1);
+		}
+		if (show_debug) console.debug("friend_list", friend_ids);
+		return friend_ids;
 	}).catch(err => {
 		setTimeout(load_keywords, 1000);
 		console.error("Get friend list failed");
@@ -76,10 +79,10 @@ function do_match(text) {
 
 function exclude_mute() {
 	var $me = $("div.plurk.plurk_box"),
-		plurk_id = $me.attr("id").match(/p(\d+)/),
+		plurk_id = getPlurkIdByElement($me),
 		i;
 	if (!plurk_id) return;
-	plurk_id = plurk_id[1];
+
 	if ((i = jQuery.inArray(plurk_id, exclude_mute_plurk)) != -1) {
 		exclude_mute_plurk.splice(i, 1);
 		set_mute(plurk_id, 2);
@@ -100,10 +103,10 @@ function exclude_mute() {
 
 function mute_user() {
 	var $me = $("div.plurk.plurk_box"),
-		plurk_id = $me.attr("id").match(/p(\d+)/),
+		plurk_id = getPlurkIdByElement($me),
 		i;
 	if (!plurk_id) return;
-	plurk_id = plurk_id[1];
+
 	if ($me.find("td.td_qual span.q_replurks").length > 0) var nameid = $me.find('div.text_holder span:first-child a').attr('href').match(/\/(\w+)/)[1];
 	else var nameid = $me.find('a.name').attr('href').match(/\/(\w+)/)[1];
 	if (!user_name) getusername();
@@ -128,43 +131,67 @@ function mute_user() {
 	return false;
 }
 
-function filter_loaded_plurks() {
-	if (!user_name) getusername();
-	$('div.plurk').each(function() {
-		if ($(this).parents("#colorbox").length > 0) return;
-		if ($(this).parents("#colorboxVideo").length > 0) return;
-		var $me = $(this),
-			plurk_id = $me.attr("id").match(/p(\d+)/),
-			text, nameid, name;
+function getPlurkIdByElement(element) {
+	var $me = $(element),
+		plurk_id = $me.data("pid");
+	if (!plurk_id) {
+		plurk_id = $me.attr("id").match(/p(\d+)/);
 		if (!plurk_id) return;
 		plurk_id = plurk_id[1];
-		var is_replurk = ($me.find("td.td_qual span.q_replurks").length > 0);
-		if (is_replurk) {
-			text = $me.find('div.text_holder span.text_holder').html();
-			nameid = $me.find('div.text_holder span:first-child a').attr('href').match(/\/(\w+)/)[1];
-			name = $me.find('div.text_holder span:first-child a').html();
-		} else {
-			text = $me.find('div.text_holder').html();
-			nameid = $me.find('a.name').attr('href').match(/\/(\w+)/)[1];
-			name = $me.find('a.name').html();
+	}
+	return plurk_id;
+}
+
+var last_plurkbox = null;
+
+function getPlurkData(plurk_id) {
+	return localScript(async function(plurk_id) {
+		let plurk = PlurksManager.getPlurkById(plurk_id);
+		function getUserByIdAsync(uid) {
+			return new Promise(function(resolve, reject) {
+				jQuery.when(Users.fetchUsersIfNeeded([uid], "gp")).always(function () {
+					resolve(Users.getUserById(uid));
+				});
+			});
 		}
-		if (text.match(/^\[轉噗\]\<a\shref\=\"http\:\/\/tinyurl\.com\/([^\"]+)\"([^\>]+)\>([^\<\>]+)\<\/a\>(\s【卡馬救星】)?$/) /* 卡馬救星 */ || (nameid == "baipu" && text.match(/^哇！今天有\s(\d+)\s位掰噗之友生日喔(.*)$/)) /* 掰噗 */ || (nameid == "pooogle" && text.match(/^\[(\d+)\/(\d+)\]\s恭喜\s(\d+)\s位壽星榜上有名，榮登卡馬警衛首頁。(.*)$/)) /* 卡馬警衛 */ || (nameid == "pooogle" && text.match(/^\[(\d+)\/(\d+)\]\s哇！今天有\s(\d+)\s位捧油生日喔。(.*)$/)) /* 卡馬警衛 */ || (nameid == "pooogle" && text.match(/^\[(\d+)\/(\d+)\]\s又到了我們每日一次的開獎時間了，恭喜今天的\s(\d+)\s位幸運得主。(.*)$/)) /* 卡馬警衛 */ ) {
-			$me.hide();
-			if ($me.hasClass("new")) set_mute(plurk_id, 2);
-			return;
+		let user = await getUserByIdAsync(plurk.owner_id);
+		return {
+			plurk_id: plurk.plurk_id,
+			content: plurk.content,
+			content_raw: plurk.content_raw,
+			is_unread: plurk.is_unread,
+			is_replurk: !!plurk.replurker_id,
+			limited_to: plurk.limited_to,
+			owner: {
+				uid: user.uid,
+				display_name: user.display_name,
+				nick_name: user.nick_name,
+				is_me: SiteState.getSessionUser().id == user.uid,
+				is_friend: user.uid in window.FRIENDS
+			}
 		}
-		if (user_name && user_name == nameid) {
-			if ($me.hasClass("plurk_box")) {
+	}, plurk_id);
+}
+
+function filter_plurk(plurk_id) {
+	if (!plurk_id) return Promise.resolve();
+
+	let self = $("#p" + plurk_id),
+		isPlurkBox = self.length > 0 && self.hasClass("plurk_box");
+
+	return getPlurkData(plurk_id).then(function(plurk) {
+		if (plurk.owner.is_me || plurk.limited_to && plurk.limited_to != "|0|") {
+			if (isPlurkBox && last_plurkbox != plurk.plurk_id) {
 				$("#excludemute").html("");
 				$("#excludeuser").html("");
+				last_plurkbox = plurk.plurk_id;
 			}
-			return;
+			return false;
 		}
-		if ($me.hasClass("plurk_box")) {
+		if (isPlurkBox && last_plurkbox != plurk.plurk_id) {
 			if ($("#excludemute").length < 1) {
 				$("#form_holder .info_box .perma_link").parent().append($("<div/>", {
 					"class": "perma_link",
-					id: "ExcludeMuteDiv",
 					html: $("<a/>", {
 						id: "excludemute",
 						href: "#",
@@ -172,7 +199,6 @@ function filter_loaded_plurks() {
 					})
 				}), $("<div/>", {
 					"class": "perma_link",
-					id: "ExcludeUserDiv",
 					html: $("<a/>", {
 						id: "excludeuser",
 						href: "#",
@@ -180,31 +206,32 @@ function filter_loaded_plurks() {
 					})
 				}));
 			}
-			if (jQuery.inArray(plurk_id, exclude_mute_plurk) != -1) $("#excludemute").html("自動消音");
+			if (exclude_mute_plurk.indexOf(plurk.plurk_id) != -1) $("#excludemute").html("自動消音");
 			else $("#excludemute").html("不自動消音");
-			if (jQuery.inArray(nameid, keywords) != -1 || jQuery.inArray("@" + nameid, keywords) != -1) $("#excludeuser").html("不消音此人");
+			if (keywords.indexOf(plurk.owner.display_name) != -1 || keywords.indexOf("@" + plurk.owner.nick_name) != -1) $("#excludeuser").html("不消音此人");
 			else $("#excludeuser").html("消音此人");
+			last_plurkbox = plurk.plurk_id;
 		}
-		if (!$me.hasClass("new")) return;
-		if (jQuery.inArray(plurk_id, exclude_mute_plurk) != -1) return;
-		var do_mute = false;
-		if (is_replurk && friend_list) {
-			do_mute = true;
-			for (i in friend_list) {
-				if (nameid == friend_list[i].nick_name) {
-					do_mute = false;
-					break;
-				}
-			}
+		if (plurk.is_unread != 1) return false; /* 已讀 */
+
+		if (exclude_mute_plurk.indexOf(plurk.plurk_id) != -1) return false; /* exclude plurk */
+
+		if (plurk.is_replurk && !plurk.owner.is_friend) return true;
+
+		if (do_match(plurk.content_raw) || do_match(plurk.content) || do_match(plurk.owner.display_name) || do_match("@" + plurk.owner.nick_name)) {
+			return true;
 		}
-		if (do_mute || do_match(text) || do_match(name) || do_match(nameid) || do_match("@" + nameid)) {
+	}).then(function(mute) {
+		if (mute) {
 			set_mute(plurk_id, 2);
-			console.debug("set_mute:", name + "(" + nameid + ")", ":", text);
 		}
 	});
-	$("#form_holder .info_box > span").filter(function() {
-		return $(this).html() == " ";
-	}).html("");
+}
+
+function filter_loaded_plurks() {
+	$('div.plurk').each(function() {
+		filter_plurk(getPlurkIdByElement(this));
+	});
 }
 
 function open_options() {
@@ -212,6 +239,50 @@ function open_options() {
 		type: 'openOptions'
 	}, function(response) {});
 	return false;
+}
+
+function listenBroadcastStation(a, b, cb) {
+	const id = '__BroadcastStation__' + Math.random();
+	localScript(function(args) {
+		BroadcastStation.listen(args.a, args.b, function (res) {
+			document.dispatchEvent(new CustomEvent(args.id, {
+				"detail": res ? res.plurk_id : 0
+			}));
+		});
+	}, {a, b, id});
+	document.addEventListener(id, function(e) {
+		cb(e.detail);
+	});
+}
+
+function bindEvent() {
+	listenBroadcastStation("plurk", "update", filter_plurk);
+	listenBroadcastStation("poll", "new_response", filter_plurk);
+
+	$("#timeline_holder").on("click", ".plurk", function(e) {
+		filter_plurk(getPlurkIdByElement(this));
+	});
+
+	bindAddPlurks();
+}
+
+function bindAddPlurks() {
+	const id = '__PlurkTimelineHolder.addItems__' + Math.random();
+	localScript(function(id) {
+		PlurkTimelineHolder.prototype.addItems = new Proxy(PlurkTimelineHolder.prototype.addItems, {
+			apply: function(target, thisArg, argumentsList) {
+				var result = target.apply(thisArg, argumentsList);
+				var pids = argumentsList[0].map(p => p.plurk.plurk_id);
+				document.dispatchEvent(new CustomEvent(id, {
+					"detail": pids
+				}));
+				return result;
+			}
+		});
+	}, id);
+	document.addEventListener(id, function(e) {
+		e.detail.forEach(pid => filter_plurk(pid));
+	});
 }
 
 function plurk_mute_init() {
@@ -247,7 +318,8 @@ function plurk_mute_init() {
 						"class": "sep"
 					}));
 					setInterval(load_keywords, 60000);
-					setInterval(filter_loaded_plurks, interval);
+					bindEvent();
+					filter_loaded_plurks();
 				});
 			}
 		});
