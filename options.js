@@ -1,7 +1,4 @@
 var keywords;
-var key_groups = [
-	["星座噗", "白羊", "金牛", "雙子", "巨蟹", "獅子", "處女", "天秤", "天蠍", "射手", "摩羯", "水瓶", "雙魚", "牡羊"]
-];
 
 function save_options() {
 	localStorage['mute_keywords'] = JSON.stringify(keywords);
@@ -38,26 +35,7 @@ function add_keyword() {
 	$("#del_keyword").fadeOut().html("");
 }
 
-function add_groups(i) {
-	for(j = 1; j < key_groups[i].length; j++) {
-		if(key_groups[i][j] && jQuery.inArray(key_groups[i][j], keywords) == -1) {
-			keywords.push(key_groups[i][j]);
-		}
-	}
-	save_options();
-}
-
 function restore_options() {
-	$("#key_groups").html("")
-	for(i in key_groups) {
-		if(i != 0) $("#key_groups").append(",&nbsp;<wbr/>");
-		$("#key_groups").append(
-		$("<a/>").attr("href", "#").data("id", i).bind("click", function(e) {
-			e.stopPropagation();
-			add_groups($(this).data("id"));
-			return false;
-		}).html(htmlspecialchars(key_groups[i][0])));
-	}
 	keywords = split_mute_keywords(localStorage["mute_keywords"]);
 	console.debug('keywords:', keywords);
 	$("#mute_keywords").html("");
@@ -70,6 +48,14 @@ function restore_options() {
 			return false;
 		}).html(htmlspecialchars(keywords[i])));
 	}
+	$("#import").val(localStorage['mute_keywords']);
+}
+
+function import_keywords() {
+	if (confirm("確定要匯入關鍵字？這將會覆蓋掉原本的設定")) {
+		keywords = split_mute_keywords($("#import").val());
+		save_options();
+	}
 }
 
 jQuery(document).ready(function() {
@@ -77,6 +63,12 @@ jQuery(document).ready(function() {
 	$("#add_form").bind("submit", function(e) {
 		e.stopPropagation();
 		add_keyword();
+		return false;
+	});
+
+	$("#import_form").bind("submit", function(e) {
+		e.stopPropagation();
+		import_keywords();
 		return false;
 	});
 });
