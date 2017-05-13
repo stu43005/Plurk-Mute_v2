@@ -55,10 +55,18 @@ function getusername() {
 }
 
 function set_mute(pid, c) {
-	localScript(function(args) {
-		var a = PlurksManager.getPlurkById(args.pid);
-		a.is_unread = args.c == 2 ? 0 : 2;
-		PlurksManager.switchMute(args.pid);
+	/*
+	is_unread:
+		0: readed
+		1: new
+		2: mute
+	*/
+	localScript(function({pid, c}) {
+		var plurk = PlurksManager.getPlurkById(pid);
+		if (((c == 0 || c == 1) && plurk.is_unread == 2) ||
+			(c == 2 && (plurk.is_unread == 0 || plurk.is_unread == 1))) {
+			PlurksManager.switchMute(pid);
+		}
 	}, {
 		pid: pid,
 		c: c
